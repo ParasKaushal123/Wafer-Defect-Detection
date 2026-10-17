@@ -1,0 +1,116 @@
+\documentclass[10pt,a4paper,twocolumn]{article}
+\usepackage[margin=17mm,columnsep=6mm]{geometry}
+\usepackage{mathptmx}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\makeatletter
+\def\ps@proposal{%
+\def\@oddhead{\hfil\footnotesize Nuisance-Separated Diffusion Evidence for Wafer Inspection\hfil}%
+\let\@evenhead\@oddhead
+\def\@oddfoot{\footnotesize Research proposal\hfil\thepage}%
+\let\@evenfoot\@oddfoot}
+\renewcommand\section{\@startsection{section}{1}{0pt}{-8pt}{4pt}{\normalfont\normalsize\bfseries}}
+\renewcommand\subsection{\@startsection{subsection}{2}{0pt}{-5pt}{3pt}{\normalfont\small\bfseries}}
+\long\def\@makecaption#1#2{\vskip4pt\small\noindent\textbf{#1.} #2\par}
+\makeatother
+\pagestyle{proposal}
+\setlength{\headheight}{12pt}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\setlength{\textfloatsep}{9pt}
+\setlength{\dbltextfloatsep}{10pt}
+\setlength{\abovedisplayskip}{5pt}
+\setlength{\belowdisplayskip}{5pt}
+\setlength{\abovedisplayshortskip}{3pt}
+\setlength{\belowdisplayshortskip}{3pt}
+\newcommand{\method}{\textsc{NE-BWD}}
+\begin{document}
+\twocolumn[{
+\begin{center}
+{\Large\bfseries Nuisance-Separated Diffusion Evidence\par
+for Robust Wafer Defect Detection\par}
+\vspace{5pt}
+{\small A public-data extension of BWD-DETR with evidence-guided inspection}
+\end{center}
+\vspace{2pt}
+\begin{minipage}{\textwidth}
+\small
+\noindent\textbf{Abstract.}
+Optical wafer inspection requires sensitivity to weak defects while remaining robust to illumination and sensor variation. This proposal introduces \method{}, a public-data extension of BWD-DETR that couples acquisition-factor separation with normal-feature diffusion inversion. The original wavelet backbone, contextual interaction, multiscale fusion and detection decoder are retained. Feature differences between paired normal images identify acquisition-sensitive directions; diffusion models the complementary structural representation. Short inversion trajectories provide spatial evidence to a bounded fusion adapter before defect prediction, while an unfiltered feature path protects subtle defects from excessive suppression. A supervised public-wafer protocol will evaluate localization, false alarms and robustness through matched-budget ablations. An evidence workbench and defect-family explorer will support human verification and organization of unfamiliar defects. The proposed contribution is the architectural coupling of nuisance-aware normality evidence with wafer detection, rather than independent detector ensembling. Accuracy improvements remain hypotheses to be tested.
+\par\vspace{4pt}
+\noindent\textit{Keywords:} wafer inspection; defect detection; BWD-DETR; diffusion inversion; acquisition robustness.
+\end{minipage}
+\vspace{10pt}
+}]
+
+\section{Introduction}
+Patterned wafer surfaces contain strong circuit textures that can obscure small particles, scratches and local structural damage. Changes in exposure or sensor noise can also resemble defects, creating nuisance alarms. Suppressing these changes indiscriminately is problematic: faint defects may occupy the same feature directions as acquisition variation. A useful detector must therefore distinguish benign appearance changes without discarding weak defect evidence.
+
+BWD-DETR addresses wafer-specific localization through wavelet-assisted features and contextual fusion~\cite{bwd}. However, its authors identify systematic assessment of illumination, noise and contrast sensitivity as an unresolved direction. We investigate whether normality modeling in acquisition-separated features can close this gap. Our objectives are to preserve the inherited detector's localization strengths, reduce false alarms under controlled and genuine appearance shifts, and expose inspectable evidence to engineers. The study concerns optical surface images, rather than electrical wafer-bin maps or physically calibrated nanoscale metrology.
+
+\section{Literature Review}
+Reviews of wafer inspection emphasize data-access limitations, inconsistent evaluation and the difficulty of recognizing unfamiliar defects~\cite{review}. BWD-DETR~\cite{bwd} combines WFE ResNet-18, sparse-enhanced mixed-scale feature interaction (SMFI), context-aware shift fusion (CAS-Fusion) and a transformer detection decoder. It reports 96.56\% AP$_{50}$ and 54.94\% AP$_{50:95}$ on its private bright-field data. These results motivate the architecture but do not establish its performance on public images.
+
+SubspaceAD models normal feature variation through a compact subspace~\cite{subspace}; IDEAL explicitly suppresses nuisance normal deviations when learning anomaly-sensitive representations~\cite{ideal}. Consequently, nuisance removal alone is not a new contribution. InvAD uses feature-space diffusion inversion to obtain anomaly evidence without reconstructing a clean image~\cite{invad}. Our proposal differs by estimating acquisition directions from aligned normal-view differences and integrating inversion evidence \emph{inside} wafer feature fusion. The research question is whether this coupling improves on augmentation, projection and independent score-fusion controls.
+
+\section{Methodology}
+\subsection{Public-data adaptation}
+Texture-AD provides public normal wafer images and pixel-level defect annotations~\cite{texture}. Because its standard protocol is normal-only anomaly detection, we will define a separate \emph{supervised detection partition} for BWD-DETR. Defective images allocated to development will be excluded from the new test set; results will not be compared directly with the original normal-only leaderboard. A group-based 70/15/15 training, validation and test split is proposed, with final counts reported after duplicate and related-crop auditing.
+
+Instance masks will be converted into bounding boxes; connected-component boxes from semantic masks will be audited for merged defects. Images will be resized with preserved aspect ratio and padding, initially to a 640-pixel input. Masks will use nearest-neighbor resizing. All variants receive identical preprocessing and annotations. Normal training images supply the acquisition pairs and diffusion targets; calibration uses separate normal validation images. Test labels never determine projections, thresholds or reference libraries.
+
+\subsection{Protected nuisance separation}
+The inherited backbone produces multiscale features $F_s(x)$. For a normal image $x$, bounded exposure and noise transformations $T_a,T_b$ yield aligned differences
+\begin{equation}
+\Delta_s=F_s(T_a(x))-F_s(T_b(x)).
+\label{eq:delta}
+\end{equation}
+An orthonormal low-rank basis $U_s$ is estimated from training differences. For a centered feature $f_s$, we separate its acquisition-sensitive contribution $p_s$ from the complementary representation $q_s$:
+\begin{equation}
+p_s=U_sU_s^{\top}f_s,\qquad q_s=f_s-p_s.
+\label{eq:factor}
+\end{equation}
+These factors are empirical feature coordinates, not identified physical causes. The original $f_s$ remains available to detection because a genuine defect can also contribute to $p_s$. Conservative photometric changes are studied first; blur is evaluated separately because it can destroy defect visibility.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{pipeline.png}
+\caption{Proposed \method{} architecture. Blue modules retain BWD-DETR; green modules couple nuisance separation, feature inversion and bounded fusion adaptation. Original multiscale paths remain available to detection. Purple modules support evidence review and defect-family exploration. Dashed arrows indicate training-only inputs.}
+\label{fig:pipeline}
+\end{figure*}
+
+\subsection{Diffusion evidence and fusion}
+A compact noise predictor learns the distribution of standardized, dimension-reduced $q_s$ features from normal images. Its noise-prediction objective uses only clean support. If defective training images contribute background features, the entire feature receptive field must be verified clean; a normal center pixel alone is insufficient. At inference, an initial three-step inversion produces terminal-norm and trajectory-increment descriptors. Normal-validation statistics calibrate their deviations; these cues are not interpreted as exact likelihoods or defect probabilities.
+
+Let $B_s$ denote the original CAS-Fusion output and $e_s$ the spatial inversion descriptor. The proposed adapter computes
+\begin{equation}
+B'_s=B_s+\alpha_s\tanh\!\left(W_s[B_s,q_s,p_s,e_s]\right),
+\label{eq:fusion}
+\end{equation}
+where $W_s$ is a learned projection and $\alpha_s$ is bounded and initialized to zero. Aligned features and evidence modify fusion before the inherited query selection and decoder (Fig.~\ref{fig:pipeline}). No independent detection scores are averaged, and no region is removed before detection solely because its normality evidence is weak.
+
+Training proceeds in three stages: reproduce adapted BWD-DETR; freeze its backbone and fit the acquisition basis, projection and diffusion model; then train the adapter and downstream detector while keeping the normality representation fixed. This avoids feature-distribution drift. The control receives matched continuation training. A paired-output consistency term may supplement detection loss only for transformations that preserve visible defects.
+
+\section{Inspection Interface}
+The \emph{evidence workbench} presents raw crops, predicted boxes, spatial evidence and retrieved normal training patches. Engineers can confirm alarms, mark benign variation and correct regions, with reference provenance and model versions recorded. Retrieved patches are supporting comparisons, not guaranteed registered clean counterparts; feature evidence is not presented as a ground-truth defect mask.
+
+The \emph{defect-family explorer} clusters detected-region descriptors derived from structural features and inversion evidence. Representative crops support human merging, splitting and naming of provisional families. Clustering operates in the original descriptor space, with unassigned regions retained. It does not guarantee discovery of defects missed by the detector or establish a shared manufacturing cause. Public-data demonstrations use image batches rather than invented lot or wafer-position metadata.
+
+\section{Evaluation and Expected Contribution}
+Primary outcomes are AP$_{50:95}$ and defect recall at fixed false positives per image, supplemented by size-stratified recall, pixel AP for evidence maps and end-to-end latency. Clean images, synthetic acquisition changes and genuine held-out appearance groups are evaluated separately. Operating thresholds are selected on validation data. Main comparisons use at least three seeds, paired group-bootstrap uncertainty and matched annotation, resolution and tuning budgets.
+
+Ablations compare plain BWD-DETR, matched augmentation, nuisance separation alone, raw-feature inversion, independent score fusion, a matched-capacity adapter and the complete method. Replacing diffusion with a simpler Gaussian or subspace estimator tests whether inversion is necessary. Removing the protected original path tests whether factorization erases faint defects. Review time and reviewer misses are evaluated jointly; clustering quality is assessed separately from detection coverage.
+
+The expected contribution is a reproducible test of \emph{acquisition-separated normality evidence within wafer detection}. Success requires gains beyond simpler controls without unacceptable localization or latency costs. Public images do not reproduce the original ultraviolet imaging conditions or establish sub-micron sensitivity. No experimental gains are claimed in this proposal; the eventual paper's conclusions will follow the measured results.
+
+\begin{thebibliography}{6}
+\setlength{\itemsep}{0pt}
+\footnotesize
+\bibitem{bwd} R. Zhang et al., ``BWD-DETR: A Robust Framework for Bright-Field Wafer Defect Detection,'' \emph{Sensors}, 26(3), 1064, 2026. doi:10.3390/s26031064.
+\bibitem{review} J. Li et al., ``Review of wafer defect detection in semiconductor manufacturing: Algorithms, systems, and data,'' \emph{J. Intell. Manuf.}, 2026. doi:10.1007/s10845-026-02845-z.
+\bibitem{subspace} C. Lendering et al., ``SubspaceAD: Training-Free Few-Shot Anomaly Detection via Subspace Modeling,'' \emph{CVPR}, 2026. arXiv:2602.23013.
+\bibitem{ideal} H. Wang et al., ``Beyond Normal References: Discriminative Few-Shot Anomaly Detection,'' arXiv:2605.23231, 2026.
+\bibitem{invad} S. Sakai et al., ``InvAD: Inversion-based Reconstruction-Free Anomaly Detection with Diffusion Models,'' \emph{CVPR}, 2026. arXiv:2504.05662.
+\bibitem{texture} B. Wang et al., ``Texture-AD: An Unsupervised Anomaly Detection Dataset and Benchmark with Product-Variant Shifts for Textured Surfaces,'' 2026. Dataset: Texture-AD-Benchmark, Hugging Face.
+\end{thebibliography}
+\end{document}
